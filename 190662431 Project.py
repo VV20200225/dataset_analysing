@@ -6,7 +6,6 @@ from scipy import stats
 from pandas.api.types import is_numeric_dtype
 from sklearn.linear_model import LinearRegression
 
-
 # Class and functions
 # -choosing_dataset
 def choosing_dataset():
@@ -15,7 +14,6 @@ def choosing_dataset():
 
 # -dataset class
 class dataset:
-
     def __init__(self, filename):
         # Raise an error if filename is not a string
         if not isinstance(filename, str):
@@ -30,7 +28,6 @@ class dataset:
         self.filename = filename
         # Read the file
         self.df = pd.read_csv(self.filename)
-
         # Make a dictionary to save the distribution result
         self.distribution = {}
 
@@ -56,7 +53,7 @@ class dataset:
             return
 
         # Determine binomial data
-        lst = self.df[dependent].sort()
+        lst = self.df[dependent].dropna().values.tolist()
         # For a sorted list, if lst[0] != lst[-1] and lst[0] + lst[-1] = len(lst), then the item values for the list might be binomial
         if lst.count(lst[0]) + lst.count(lst[-1]) == len(lst) and lst[0] != lst[-1]:
             # The values might just look binomial and we need to confirm with the user.
@@ -91,12 +88,13 @@ class dataset:
             print(
                 'The p-value for dependent is larger than critical-value of {}, which rejects the normality test.'.format(
                     critical_val))
-            self.distribution[dependent] = shapiro + ['Gaussian']
+            self.distribution[dependent] =  [shapiro[0], shapiro[1], 'Gaussian']
         else:
             print(
                 'The p-value for dependent is smaller than or equal to critical-value of {}, which accepts the normality test.'.format(
                     critical_val))
-            self.distribution[dependent] = shapiro + ['non-Gaussian']
+            self.distribution[dependent] = [shapiro[0], shapiro[1], 'non-Gaussian']
+
 
     def stat_tests(self):
         # Reminder
@@ -121,12 +119,38 @@ class dataset:
             print('Please run the distribution test before running statistical tests.')
             return
 
-        if self.distribution[dependent][3] == 'Gaussian':
-            print()
-        if self.distribution[dependent][3] == 'non-Gaussian':
-            print()
+        # Binomial case
         if self.distribution[dependent][3] == 'binomial':
-            print()
+
+
+            return
+
+        # Before the cases for Gaussian and non-Gaussian
+        # Extract independent groups and save their names
+        group_name = list(self.df.groupby([independent]).groups.keys())
+        # Make an empty group
+        groups = {}
+        # Group the dependent according to the independent subgroups
+        for subgroup in group_name:
+            groups[subgroup] = self.df.groupby([independent]).get_group(subgroup)[dependent].values.tolist()
+
+        # Gaussian case
+        if self.distribution[dependent][3] == 'Gaussian':
+            print(stats.f_oneway(*groups.values()))
+            return
+        # Non-Gaussian case
+        if self.distribution[dependent][3] == 'non-Gaussian':
+            # Compare each two groups
+            lst_key = list(groups.keys())
+            for i in range(len(lst_key)):
+                for k in range(i + 1, len(lst_key)):
+                    utest = stats.mannwhitneyu(groups[lst_key[i]], groups[lst_key[k]])
+                    print(independent,lst_key[i],'and', lst_key[k])
+                    print(utest)
+            return
+
+
+
 
         # Calculate and print the ANOVA result
         anova = stats.shapiro(self.df[dependent].dropna())
@@ -136,42 +160,56 @@ class dataset:
         print()
 
 
+
 # -Unit testing
 # class TestFunctions(unittest.TestCase):
 
-menu = {1: ("Choose a dataset", choosing_dataset),
-        2: ("Test for distribution type", dataset_file.distribution_test),
-        3: ("Statistical analysis",dataset_file.stat_tests),
-        4: ("Linear regression",),
-        5: ("Help",),
-        6: ("Exit", exit)}
 
-while True:
-    # Display the menu
+
+def menu():
+    # Menu options
+    menu = {1: "Choose a dataset", 2: "Test for distribution type",
+            3: "Statistical analysis",4: "Linear regression",5: "Help", 6: "Exit"}
+    # Display the menu description
     print('''
     #################### MENU ####################
     Input a command to use the function.
     E.g. Input 5 to use the [Help] command.
 
     The current dataset is: {} 
-    '''.format('Not existed' if not 'dataset_file' in globals() else dataset_file.filename))
-
+    '''.format('None' if not 'dataset_file' in globals() else dataset_file.filename))
+    # Print the menu options
     for key in sorted(menu.keys()):
-        print('    [{}] {}'.format(key, menu[key][0]))
+        print('    [{}] {}'.format(key, menu[key]))
 
     # Input the command and catch errors
     try:
         current_command = int(input('\nPlease select: '))
+        if not 1 <= current_command <= 6:
+            raise ValueError
     except ValueError:
-        print('Please enter an integer.')  # Don't raise error as the loop should restart later.
+        raise ValueError('Please enter an integer between 1 and 6.')
 
     # Run the selected command and catch errors
     try:
-        menu.get(current_command)[1]()
+        if current_command == 1:
+            choosing_dataset()
+        if current_command == 2:
+            dataset_file.distribution_test()
+        if current_command == 3:
+            dataset_file.stat_tests()
     except KeyError:
-        print('Please enter an integer between 1 and 6.')  # Don't raise error as the loop should restart later.
+        raise KeyError('Please enter an integer between 1 and 6.')
     except ValueError:
-        print('Please choose a dataset before using this function.')  # Don't raise error as the loop should restart later.
+        raise ValueError('Please choose a dataset before using this function.')
+
+while True:
+    try:
+        menu()
+    except ValueError as e:
+        print(e)  # Don't raise error as the loop should restart later.
+
+
 
 # if __name__ == '__main__':
 #    unittest.main()
