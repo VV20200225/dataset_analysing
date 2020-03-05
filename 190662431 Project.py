@@ -127,12 +127,12 @@ class dataset:
 
         # Before the cases for Gaussian and non-Gaussian
         # Extract independent groups and save their names
-        group_name = list(self.df.groupby([independent]).groups.keys())
+        group_name = list(self.df.dropna().groupby([independent]).groups.keys())
         # Make an empty group
         groups = {}
         # Group the dependent according to the independent subgroups
         for subgroup in group_name:
-            groups[subgroup] = self.df.groupby([independent]).get_group(subgroup)[dependent].values.tolist()
+            groups[subgroup] = self.df.dropna().groupby([independent]).get_group(subgroup)[dependent].dropna().values.tolist()
 
         # Gaussian case
         if self.distribution[dependent][3] == 'Gaussian':
@@ -149,12 +149,6 @@ class dataset:
                     print(utest)
             return
 
-
-
-
-        # Calculate and print the ANOVA result
-        anova = stats.shapiro(self.df[dependent].dropna())
-        print('Test statistic: {}\np-value: {}'.format(anova[0], anova[1]))
 
     def linear_regression(self):
         print()
