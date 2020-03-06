@@ -1,15 +1,15 @@
 # Import libraries
-import unittest
 import pandas as pd
 import os
 from scipy import stats
 from pandas.api.types import is_numeric_dtype
-from sklearn.linear_model import LinearRegression
 
 # Class and functions
 # -choosing_dataset
 def choosing_dataset():
+    # Let dataset_file be global
     global dataset_file
+    # Create a dataset object with an argument that receives input.
     dataset_file = dataset(str(input('\nPlease input a filename in .csv format: ')))
 
 # -dataset class
@@ -20,11 +20,11 @@ class dataset:
             raise TypeError('The filename is not a string.')
         # Raise an error if filename does exist
         if not os.path.isfile(filename):
-            raise FileNotFoundError('No such file or directory.')
+            raise FileNotFoundError('No such file or directory. Please try again.')
         # Raise an error if filename is not in .csv format
         if filename[-4:] != '.csv':
             raise FileNotFoundError('Please choose a dataset file in .csv format.')
-
+        # Assign filename to self.filename
         self.filename = filename
         # Read the file
         self.df = pd.read_csv(self.filename)
@@ -41,29 +41,26 @@ class dataset:
         if not var in self.df.columns:
             print('Please enter a correct variable name.')
             return
-        print('The {} {} is selected.'.format(var_type, var))
+        print('The {} variable {} is selected.'.format(var_type, var))
         return var
 
     def distribution_test(self):
-        # Choose dependent
+        # Choose a dependent
         dependent = self.input_variable('distribution test', 'dependent')
-        # When it's failed to select a variable. The variable should then be a None.
-        # In this case, we should end the execution of the function call.
+        # Failed to select a variable will cause a value of None. In this case, we should end the execution of the function call.
         if dependent == None:
             return
 
         # Determine binomial data
         lst = self.df[dependent].dropna().values.tolist()
-        # For a sorted list, if lst[0] != lst[-1] and lst[0] + lst[-1] = len(lst), then the item values for the list might be binomial
-        if lst.count(lst[0]) + lst.count(lst[-1]) == len(lst) and lst[0] != lst[-1]:
-            # The values might just look binomial and we need to confirm with the user.
-            bino_confirm = input('This dependent consists only {} and {}. Do you confirm that it is binomial?\nEnter Y to confirm: '.format(lst[0],lst[-1]))
-            if bino_confirm== 'Y' or 'y' or 'yes' or 'Yes':
-                self.distribution[dependent] = [0, 0, 'binomial']
-                print('You have confirmed that the dependent is binomial.')
-                return
-            else:
-                print('You have disagreed that the dependent is binomial.')
+        # For a sorted list, if lst[0] != lst[-1], lst[0] + lst[-1] = len(lst) and lst[0] + lst[-1] = 1,
+        # then the item values for the list might be binomial
+        if lst.count(lst[0]) + lst.count(lst[-1]) == len(lst) and lst[0] != lst[-1] and lst[0] + lst[-1] == 1:
+            # Save the type
+            self.distribution[dependent] = [0, 0, 'binomial']
+            print('The dependent is binomial. Skip the distribution test.')
+            # Return from the fuction
+            return
         else:
             print('The dependent is not binomial.')
 
@@ -72,10 +69,9 @@ class dataset:
             critical_val = float(input('\nPlease enter a critical value before running Shapiro-Wilk test: '))
         except ValueError:
             print('The critical value should be numeric')
-            return
 
         # Shapiro test
-        # Return the function if the dependent is not numeric because Shapiro test only takes numbers.
+        # Return from the function if the dependent is not numeric because Shapiro test only takes numbers.
         if not is_numeric_dtype(self.df[dependent]):
             print('The dependent should be numeric for Shapiro-Wilk test .')
             return
@@ -83,15 +79,15 @@ class dataset:
         shapiro = stats.shapiro(self.df[dependent].dropna())
         print('Test statistic: {}\np-value: {}'.format(shapiro[0], shapiro[1]))
 
-        # Print the comparison between p-value and critical-value
-        if shapiro[1] > critical_val:
+        # Print the comparison between p-value and critical value
+        if shapiro[1] < critical_val:
             print(
-                'The p-value for dependent is larger than critical-value of {}, which rejects the normality test.'.format(
+                'The p-value for dependent is larger than critical value of {}, which rejects the normality test.'.format(
                     critical_val))
             self.distribution[dependent] =  [shapiro[0], shapiro[1], 'Gaussian']
         else:
             print(
-                'The p-value for dependent is smaller than or equal to critical-value of {}, which accepts the normality test.'.format(
+                'The p-value for dependent is smaller than or equal to critical value of {}, which accepts the normality test.'.format(
                     critical_val))
             self.distribution[dependent] = [shapiro[0], shapiro[1], 'non-Gaussian']
 
@@ -103,14 +99,12 @@ class dataset:
 
         # Choose an independent
         independent = self.input_variable('statistical tests', 'independent')
-        # When it's failed to select a variable. The variable should then be a None.
-        # In this case, we should end the execution of the function call.
+        # Failed to select a variable will cause a value of None. In this case, we should end the execution of the function call.
         if independent == None:
             return
         # Choose a dependent
         dependent = self.input_variable('statistical tests', 'dependent')
-        # When it's failed to select a variable. The variable should then be a None.
-        # In this case, we should end the execution of the function call.
+        # Failed to select a variable will cause a value of None. In this case, we should end the execution of the function call.
         if dependent == None:
             return
 
@@ -120,58 +114,70 @@ class dataset:
             return
 
         # Binomial case
-        if self.distribution[dependent][3] == 'binomial':
-
-
+        if self.distribution[dependent][2] == 'binomial':
+            print('\nChi-square test of independence:')
+            # Create a contingency table that contains the observed frequencies
+            observed = pd.crosstab(self.df[dependent].dropna(), self.df[independent].dropna())
+            chi2 = stats.chi2_contingency(observed)
+            # Print the chi-square test result
+            print('Test statistic: {}  p-value: {}  Degree of freedom: {}\nExpected frequencies: {}'.format(*chi2))
             return
 
-        # Before the cases for Gaussian and non-Gaussian
-        # Extract independent groups and save their names
+        # Before the cases for Gaussian and non-Gaussian,
+        # extract independent groups and save their names
         group_name = list(self.df.dropna().groupby([independent]).groups.keys())
         # Make an empty group
         groups = {}
         # Group the dependent according to the independent subgroups
         for subgroup in group_name:
-            groups[subgroup] = self.df.dropna().groupby([independent]).get_group(subgroup)[dependent].dropna().values.tolist()
+            groups[subgroup] = self.df.dropna().groupby([independent]).get_group(subgroup)[dependent].values.tolist()
 
         # Gaussian case
-        if self.distribution[dependent][3] == 'Gaussian':
+        if self.distribution[dependent][2] == 'Gaussian':
+            print('\nANOVA analysis:')
+            # Run ANOVA and print the result
             print(stats.f_oneway(*groups.values()))
             return
         # Non-Gaussian case
-        if self.distribution[dependent][3] == 'non-Gaussian':
-            # Compare each two groups
+        if self.distribution[dependent][2] == 'non-Gaussian':
+            print('\nMann-Whitney U test::')
+            # Compare each two groups (Not repeatedly).
             lst_key = list(groups.keys())
             for i in range(len(lst_key)):
                 for k in range(i + 1, len(lst_key)):
+                    # Run U test and print the result
                     utest = stats.mannwhitneyu(groups[lst_key[i]], groups[lst_key[k]])
+                    # Print the combination.
                     print(independent,lst_key[i],'and', lst_key[k])
+                    # Print the U test result.
                     print(utest)
             return
-
-
-    def linear_regression(self):
-        print()
-
-
-
-# -Unit testing
-# class TestFunctions(unittest.TestCase):
-
-
-
+# -Help
+def helps():
+    print(''' 
+            Instructions:
+            1. Input 1 in the menu to select a datafile in .csv format.
+            2. Then input 2 in the menu to run the distribution test for dependent variable. 
+            3. Select a dependent and a critical value. 
+               If dependent is binomial, the test will skip and return a binomial datatype for dependent.
+               In other cases, Shapiro-Wilk test will run and the function will return a Gaussian or non-Gaussian 
+               datatype.
+            4. Input 3 to run the statistical test. 
+               Select an independent and a dependent.
+               ANOVA, Mann-Whitney U test or Chi-square test will be automatically run depending on the datatype of
+               dependent.    
+    ''')
+# -Menu
 def menu():
     # Menu options
-    menu = {1: "Choose a dataset", 2: "Test for distribution type",
-            3: "Statistical analysis",4: "Linear regression",5: "Help", 6: "Exit"}
+    menu = {1: "Choose a dataset ({})".format('None' if not 'dataset_file' in globals() else dataset_file.filename),
+            2: "Test for distribution type",
+            3: "Statistical analysis",4: "Help", 5: "Exit"}
     # Display the menu description
     print('''
-    #################### MENU ####################
-    Input a command to use the function.
-    E.g. Input 5 to use the [Help] command.
-
-    The current dataset is: {} 
-    '''.format('None' if not 'dataset_file' in globals() else dataset_file.filename))
+    ################################### MENU ###################################
+    Input a command to use the function. E.g. Input 4 to use the [Help] command.
+    ''')
     # Print the menu options
     for key in sorted(menu.keys()):
         print('    [{}] {}'.format(key, menu[key]))
@@ -179,10 +185,11 @@ def menu():
     # Input the command and catch errors
     try:
         current_command = int(input('\nPlease select: '))
-        if not 1 <= current_command <= 6:
+        # Raise error when 1<= current_command <=5.
+        if not 1 <= current_command <= 5:
             raise ValueError
     except ValueError:
-        raise ValueError('Please enter an integer between 1 and 6.')
+        raise ValueError('Please enter an integer between 1 and 5.')
 
     # Run the selected command and catch errors
     try:
@@ -192,18 +199,30 @@ def menu():
             dataset_file.distribution_test()
         if current_command == 3:
             dataset_file.stat_tests()
+        if current_command == 4:
+            helps()
+        if current_command == 5:
+            exit()
     except KeyError:
-        raise KeyError('Please enter an integer between 1 and 6.')
-    except ValueError:
-        raise ValueError('Please choose a dataset before using this function.')
+        raise KeyError('Please enter an integer between 1 and 5.')
+    except NameError:
+        raise NameError('Please choose a dataset before using this function.')
 
 while True:
     try:
+        # Run the menu
         menu()
+    # The loop should restart after catching an error
     except ValueError as e:
-        print(e)  # Don't raise error as the loop should restart later.
-
-
+        print(e)
+    except KeyError as e:
+        print(e)
+    except FileNotFoundError as e:
+        print(e)
+    except TypeError as e:
+        print(e)
+    except NameError as e:
+        print(e)
 
 # if __name__ == '__main__':
 #    unittest.main()
